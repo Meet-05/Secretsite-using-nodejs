@@ -20,6 +20,7 @@ app.use(session({
   saveUninitialized: true
 }));
 
+const GitHubStrategy = require('passport-github').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 //iniitalizing passport for our session
 app.use(passport.initialize());
@@ -32,6 +33,7 @@ const userSchema=new mongoose.Schema({
   email:String,
   password:String,
   googleId:String,
+  githubId:String,
   secret:String
 });
 
@@ -57,6 +59,7 @@ passport.deserializeUser(function(id, done) {
   });
 });
 
+//Google signin stratergy---------------------------------------------------------------------------------------------------
 //defining the google stratergy we provide  our credentials so that google can recognize our app
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
@@ -80,12 +83,37 @@ app.get('/auth/google/secrets',
     res.redirect('/secrets');
   });
 
-app.get("/",function(req,res){
-  res.render("home");
-});
 
 //use passport to authenticate using the google strategy defined above and then we tell what we want i.e the users profile that includes useremail and id
 app.get("/auth/google",passport.authenticate("google",{scope:['profile']}));
+//Google signin stratergy---------------------------------------------------------------------------------------------------
+
+//github sign in stratergy-----------------------------------------------------------------------
+passport.use(new GitHubStrategy({
+    clientID: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/github/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    User.findOrCreate({ githubId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
+
+app.get('/auth/github/secrets',
+  passport.authenticate('github', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect secrets.
+    res.redirect('/secrets');
+  });
+
+app.get('/auth/github',passport.authenticate('github'));
+//---------------------------------------------------------------------------------------------
+
+app.get("/",function(req,res){
+  res.render("home");
+});
 
 app.get("/login",function(req,res){
   res.render("login");
@@ -125,17 +153,7 @@ app.get("/register",function(req,res){
   res.render("register");
 });
 
-app.get("/secrets",function(req,res){
-  User.find({"secret":{$ne:null}},function(err,foundusers){
-    if(err){
-      console.log(err);
-    }else{
-      if(foundusers){
-        res.render("secrets",{usersWithSecrets:foundusers});
-      }
-    }
-  })
-});
+//local stratregy for singin--------------------------------------------------------------------------------------------------------
 
 app.post("/register",function(req,res){
   User.register({username:req.body.username},req.body.password,function(err,user){
@@ -152,6 +170,8 @@ app.post("/register",function(req,res){
   });
 
 });
+
+//----------------------------------------------------------------------------------------------------------------
 
 app.post("/login",function(req,res){
 
@@ -176,7 +196,17 @@ app.get("/logout",function(req,res){
   res.redirect("/");
 })
 
-
+app.get("/secrets",function(req,res){
+  User.find({"secret":{$ne:null}},function(err,foundusers){
+    if(err){
+      console.log(err);
+    }else{
+      if(foundusers){
+        res.render("secrets",{usersWithSecrets:foundusers});
+      }
+    }
+  })
+});
 app.listen(3000,function(){
   console.log("server started succesfully");
 })
